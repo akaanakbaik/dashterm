@@ -1,16 +1,27 @@
-# 🖥️ DashTerm - Terminal Prompt AI Keren
+#  DashTerm v8 — Interactive & Intelligent Terminal Dashboard
 
-DashTerm adalah sebuah proyek terminal prompt cerdas yang mengubah tampilan dan fungsi terminal Linux kamu menjadi lebih interaktif dan informatif. Dilengkapi dengan AI Prompt yang ditanam langsung di terminal, DashTerm cocok untuk developer, sysadmin, pelajar, dan siapa saja yang ingin terminalnya lebih canggih!
-
----
-
-![Preview](src/prev.jpg)
+> The ultimate **interactive terminal dashboard** — intelligent, elegant, adaptive, and real-time.  
+> Built for developers who love beauty, clarity, and performance ⚙️
 
 ---
 
-## 🚀 Cara Instalasi Cepat
+### ✨ What's New in v8
 
-Cukup jalankan perintah ini di terminal Anda:
+- 🧠 **Interactive Mode Selection** — choose between:
+  - 🧱 **Full Mode:** large and detailed ASCII logo.
+  - ⚡ **Lite Mode:** small and fast logo, perfect for minimal terminals.
+- 🔍 **Auto System Detection** — detects your virtualization (KVM, QEMU, VMware, Docker, WSL, etc.)
+- 🧩 **Self-Healing Installer** — automatically repairs missing dependencies.
+- 🌐 **Real-Time Dashboard** — refreshes every time your terminal starts.
+- 🎨 **Beautiful Output** — clean design with emoji-based visual separation.
+- 🔁 **Auto Shell Reload** — no need to relogin; the terminal restarts itself instantly.
+- 🧮 **Error-Free Execution** — all commands have fallbacks (no “command not found”).
+
+---
+
+### 📦 Installation
+
+Run this one-liner in your terminal:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/akaanakbaik/dashterm/main/install.sh)
@@ -18,84 +29,102 @@ bash <(curl -s https://raw.githubusercontent.com/akaanakbaik/dashterm/main/insta
 
 ---
 
-## 📋 Fitur Utama
+### 🧩 During Installation
 
-- ✅ Prompt terminal dengan sentuhan AI  
-- ✅ Identitas user & sistem tampil keren  
-- ✅ Informasi waktu real-time  
-- ✅ Menampilkan kutipan motivasi atau sistem AI lainnya  
-- ✅ Sangat ringan, cocok untuk VPS, Termux, ataupun server lokal  
+You’ll be greeted with an interactive prompt:
+
+```
+🧩 Pilih mode tampilan Neofetch:
+   [1] Full Logo (besar, detail)
+   [2] Lite Logo (kecil, minimalis)
+➡️  Pilihanmu [1/2]:
+```
+
+Then another prompt lets you **customize your User@Host display** (optional):
+
+```
+Masukkan tampilan User@Host yang diinginkan.
+Contoh: root@aka  (Enter untuk otomatis)
+➡️  User@Host:
+```
+
+Your preferences are stored automatically in `~/.terminal_dashboard.env`.
 
 ---
 
-## 🛠️ Langkah-langkah Instalasi Manual
+### 🖥 Example Output
 
-> *Catatan: Jika Anda sudah menggunakan perintah otomatis di atas, Anda bisa **melewati Langkah 2** dan lanjut ke Langkah 3.*
+Below is a real preview of the Lite Mode (Neofetch small ASCII logo):
 
-### Langkah 1: Unduh dan jalankan installer
-
-```bash
-bash <(curl -s https://raw.githubusercontent.com/akaanakbaik/dashterm/main/install.sh)
 ```
+            .-/+oossssoo+/-.              
+        `:+ssssssssssssssssss+:`          
+      -+ssssssssssssssssssyyssss+-        
+    .ossssssssssssssssssdMMMNysssso.      
+   /ssssssssssshdmmNNmmyNMMMMhssssss/     
+  +ssssssssshmydMMMMMMMNddddyssssssss+    
+ /sssssssshNMMMyhhyyyyhmNMMMNhssssssss/   
+.ssssssssdMMMNhsssssssssshNMMMdssssssss.  
++sssshhhyNMMNyssssssssssssyNMMMysssssss+  
+ossyNMMMNyMMhsssssssssssssshmmmhssssssso  
+ossyNMMMNyMMhsssssssssssssshmmmhssssssso  
++sssshhhyNMMNyssssssssssssyNMMMysssssss+  
+.ssssssssdMMMNhsssssssssshNMMMdssssssss.  
+ /sssssssshNMMMyhhyyyyhdNMMMNhssssssss/   
+  +sssssssssdmydMMMMMMMMddddyssssssss+    
+   /ssssssssssshdmNNNNmyNMMMMhssssss/     
+    .ossssssssssssssssssdMMMNysssso.      
+      -+ssssssssssssssssssyyssss+-        
+        `:+ssssssssssssssssss+:`          
+            .-/+oossssoo+/-.              
 
-### Langkah 2: *(Langkah ini dilewati)*
-
-> Langkah ini tidak diperlukan karena semua proses dilakukan otomatis saat install.
-
-Namun jika Anda ingin mengedit prompt AI secara manual, jalankan:
-
-```bash
-nano ~/.bashrc
+========================================
+💻  User@Host     : root@aka
+🪟  OS            : Ubuntu 22.04.5 LTS
+🔧  Kernel        : 6.8.0-45-generic
+🧠  Virtualization: KVM (VT-x)
+🕓  Login Time    : Tuesday, 04 November 2025 - 14:32:01
+⏰  Boot Time     : 2025-11-04 10:05
+📈  Uptime        : 4 hours, 27 minutes
+🌐  IP Address    : 167.71.xxx.xxx
+⚙️  CPU Model     : Intel(R) Xeon(R) CPU E5-2680 v4 @ 2.40GHz
+💪  CPU Cores     : 4
+🎨  GPU           : QXL / virtio GPU
+🧮  RAM Total     : 8G
+💾  Disk Used     : 5.3G / 25G
+📊  Load Average  : 0.12,0.09,0.05
+🧭  DNS Servers   : 1.1.1.1 8.8.8.8
+========================================
 ```
-
-Scroll ke bawah dan ubah bagian prompt sesuai keinginan Anda.
-
-### Langkah 3: Jalankan ulang konfigurasi
-
-Setelah proses instalasi selesai, script akan otomatis menjalankan:
-
-```bash
-clear && source ~/.bashrc
-```
-
-Hal ini agar perubahan langsung terlihat tanpa perlu keluar masuk terminal.
 
 ---
 
+### 💡 Supported Systems
 
-## 🤖 Cara menggunakan fitur AI
-harus dengan awalan copilot buat teks perintah/promt untuk AI di terminal nya
-```promt
-copilot hai ai
-```
-## ⚡ Cara atur promt ai nya
-silahkan liat pada bagian 
-```code
-local style= "..."
-```
-
-## 📌 Catatan Tambahan
-
-- Script ini aman untuk digunakan di server pribadi maupun publik.
-- Tidak menyentuh atau merusak konfigurasi lainnya.
-- Cocok digunakan di distribusi Ubuntu, Debian, dan turunan lainnya.
+✅ Ubuntu / Debian  
+✅ Fedora / CentOS / RHEL  
+✅ Arch / Manjaro  
+✅ openSUSE  
+✅ Alpine  
+✅ WSL / Docker / KVM / QEMU  
 
 ---
 
-## 🤝 Kontribusi
+### 🧑‍💻 Author
 
-Jika Anda ingin berkontribusi, silakan fork repository ini dan ajukan pull request.
-
----
-
-## 👨‍💻 Pembuat
-
-Proyek ini dibuat oleh **Aka** — seorang pelajar Indonesia yang penuh semangat dalam dunia otomasi dan AI.
-
-GitHub: [https://github.com/akaanakbaik](https://github.com/akaanakbaik)
+**aka**  
+📧 [akaanakbaik17@proton.me](mailto:akaanakbaik17@proton.me)  
+🌐 [https://github.com/akaanakbaik](https://github.com/akaanakbaik)
 
 ---
 
-## ❤️ Lisensi
+### ⚡ Project
 
-Proyek ini dirilis dengan lisensi MIT. Bebas digunakan, dimodifikasi, dan didistribusikan.
+**Repository:** [github.com/akaanakbaik/dashterm](https://github.com/akaanakbaik/dashterm)
+
+---
+
+### 💖 License
+
+Licensed under the **MIT License** — free for everyone to use, modify, and improve.  
+Made with ❤️ by **aka**.
