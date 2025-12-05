@@ -13,7 +13,7 @@ LOG="${TMPDIR:-/tmp}/dasterm_$(date +%s).log"
 exec 9>"$LOCK"; flock -n 9 || { echo "Installer sudah berjalan."; exit 0; }
 trap 'rm -f "$LOCK" "$LOG"' EXIT
 
-G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'; N='\033[0m'
+G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'; N='\033[0m'; BOLD='\033[1m'
 log(){ echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG" >&2; }
 ok(){ log "${G}✓${N} $*"; }
 warn(){ log "${Y}⚠${N} $*"; }
@@ -108,6 +108,7 @@ dashboard_block(){
   [ "${DASH_SHOW:-always}" = once ] && [ -n "${DASTERM_SHOWN:-}" ] && return
   export DASTERM_SHOWN=1
   
+  # Define color variables
   if [ "${DASH_COLORS:-default}" = pastel ]; then
     C1='\033[38;2;255;184;108m'; C2='\033[38;2;108;197;255m'; C3='\033[38;2;200;255;108m'; C4='\033[38;2;255;108;184m'
   else
