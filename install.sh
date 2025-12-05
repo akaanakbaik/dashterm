@@ -102,7 +102,7 @@ EOF
 dashboard_block(){
   cat <<'BLOCK'
 ### DASTERM_ACTIVE ###
-[ -z "${DASTERM_DONE:-}" ] && [ $- = *i* ] && {
+[ -z "${DASTERM_DONE:-}" ] && [ "$-" = *i* ] && {
   export DASTERM_DONE=1
   [ -f "$HOME/.dasterm.env" ] && . "$HOME/.dasterm.env"
   [ "${DASH_SHOW:-always}" = once ] && [ -n "${DASTERM_SHOWN:-}" ] && return
@@ -161,6 +161,7 @@ dashboard_block(){
   echo -e "${C2}╚══════════════════════════════════════════════════════╝${NC}"
   echo
 }
+### DASTERM_ACTIVE ###
 BLOCK
 }
 
@@ -191,7 +192,7 @@ main(){
   echo "╚══════════════════════════════════════════════════════════════╝${N}"
   
   if [ -f "$ENV_FILE" ]; then
-    warn "dasterm sudah terinstall pada $(grep DASH_INSTALLED "$ENV_FILE" | cut -d\"'\" -f2)"
+    warn "dasterm sudah terinstall pada $(grep DASH_INSTALLED "$ENV_FILE" | cut -d"'" -f2)"
     echo "1) Reconfigure"
     echo "2) Uninstall"
     echo "3) Batal"
