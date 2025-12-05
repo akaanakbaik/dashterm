@@ -105,6 +105,16 @@ dashboard_block(){
 if [ -z "${DASTERM_DONE:-}" ] && [[ "$-" == *i* ]]; then
   export DASTERM_DONE=1
   [ -f "$HOME/.dasterm.env" ] && . "$HOME/.dasterm.env"
+  
+  # Set custom prompt based on config
+  if [ -n "${DASH_AKA:-}" ] && [[ "${DASH_USERHOST:-}" == "root@"* ]]; then
+    export PS1='\[\033[1;32m\]root@'"${DASH_AKA}"'\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]\$ '
+  elif [ -n "${DASH_USERHOST:-}" ]; then
+    local user_part="${DASH_USERHOST%%@*}"
+    local host_part="${DASH_USERHOST##*@}"
+    export PS1='\[\033[1;32m\]'"${user_part}"'@'"${host_part}"'\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]\$ '
+  fi
+  
   [ "${DASH_SHOW:-always}" = once ] && [ -n "${DASTERM_SHOWN:-}" ] && return
   export DASTERM_SHOWN=1
   
