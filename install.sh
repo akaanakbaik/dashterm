@@ -102,7 +102,7 @@ EOF
 dashboard_block(){
   cat <<'BLOCK'
 ### DASTERM_ACTIVE ###
-[ -z "${DASTERM_DONE:-}" ] && [ "$-" = *i* ] && {
+if [ -z "${DASTERM_DONE:-}" ] && [[ "$-" == *i* ]]; then
   export DASTERM_DONE=1
   [ -f "$HOME/.dasterm.env" ] && . "$HOME/.dasterm.env"
   [ "${DASH_SHOW:-always}" = once ] && [ -n "${DASTERM_SHOWN:-}" ] && return
@@ -161,7 +161,7 @@ dashboard_block(){
   echo -e "${C2}║${NC} ${C1}Users${NC}         : $(who | wc -l || echo "N/A") logged in"
   echo -e "${C2}╚══════════════════════════════════════════════════════╝${NC}"
   echo
-}
+fi
 ### DASTERM_ACTIVE ###
 BLOCK
 }
