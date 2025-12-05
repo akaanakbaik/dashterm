@@ -1,129 +1,209 @@
 #!/usr/bin/env bash
-set -uo pipefail
+set -euo pipefail
 IFS=$' \t\n'
+
 TARGET_USER="${SUDO_USER:-${USER:-root}}"
-TARGET_HOME="$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6 || echo "${HOME:-/root}")"
-ENV_FILE="$TARGET_HOME/.terminal_dashboard.env"
-MARK="### TERMINAL_DASHBOARD_ACTIVE ###"
+TARGET_HOME=$(getent passwd "$TARGET_USER" 2>/dev/null | cut -d: -f6 || echo "${HOME:-/root}")
+ENV_FILE="$TARGET_HOME/.dasterm.env"
 BASHRC="$TARGET_HOME/.bashrc"
 ZSHRC="$TARGET_HOME/.zshrc"
-LOCK_FILE="${TMPDIR:-/tmp}/dashterm.lock"
-LOG_FILE="${TMPDIR:-/tmp}/dashterm_install.log"
-: > "$LOG_FILE" 2>/dev/null || true
-say(){ printf "%b\n" "$1" | tee -a "$LOG_FILE" >/dev/null; printf "%b\n" "$1"; }
-ok(){ say "OK  $*"; }
-warn(){ say "WARN  $*"; }
-exists(){ command -v "$1" >/dev/null 2>&1; }
-ensure_file(){ [ -f "$1" ] || { touch "$1" 2>>"$LOG_FILE" || true; chown "$TARGET_USER":"$TARGET_USER" "$1" 2>>"$LOG_FILE" || true; }; }
-net_ok(){ (timeout 2 getent hosts 1.1.1.1 >/dev/null 2>&1) || (timeout 2 ping -c1 -W1 1.1.1.1 >/dev/null 2>&1) || return 1; }
-with_retry(){ local tries="$1"; shift; local sleep_s="$1"; shift; local attempt=1; while true; do ( "$@" ) >>"$LOG_FILE" 2>&1 && return 0; [ "$attempt" -ge "$tries" ] && return 1; sleep "$sleep_s"; attempt=$((attempt+1)); done; }
-heal_try(){ ( "$@" ) >>"$LOG_FILE" 2>&1 || true; }
-detect_pkgmgr(){ for i in apt dnf yum pacman zypper apk; do if exists "$i"; then echo "$i"; return; fi; done; echo "none"; }
-repair_pkgmgr(){ case "$1" in apt) heal_try sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock; heal_try sudo dpkg --configure -a; heal_try sudo apt-get -f install -y ;; dnf|yum) heal_try sudo "$1" clean all ;; pacman) heal_try sudo pacman -Syy ;; zypper) heal_try sudo zypper refresh ;; apk) heal_try sudo apk update ;; esac; }
-install_deps(){ say "Memeriksa dependensi"; local pkgs=(neofetch pciutils dmidecode iproute2 coreutils procps grep awk sed lsb-release); local mgr; mgr="$(detect_pkgmgr)"; if ! net_ok; then warn "Offline mode aktif"; return 0; fi; if [ "$mgr" = "none" ]; then warn "Package manager tidak ditemukan"; return 0; fi; case "$mgr" in apt) with_retry 3 2 sudo apt-get update -qq || repair_pkgmgr apt; with_retry 3 2 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${pkgs[@]}" >/dev/null 2>&1 || repair_pkgmgr apt ;; dnf) with_retry 3 2 sudo dnf install -y "${pkgs[@]}" >/dev/null 2>&1 || repair_pkgmgr dnf ;; yum) heal_try sudo yum install -y epel-release; with_retry 3 2 sudo yum install -y "${pkgs[@]}" >/dev/null 2>&1 || repair_pkgmgr yum ;; pacman) with_retry 3 2 sudo pacman -Sy --noconfirm "${pkgs[@]}" >/dev/null 2>&1 || repair_pkgmgr pacman ;; zypper) with_retry 3 2 sudo zypper -n install "${pkgs[@]}" >/dev/null 2>&1 || repair_pkgmgr zypper ;; apk) with_retry 3 2 sudo apk add --no-cache "${pkgs[@]}" >/dev/null 2>&1 || repair_pkgmgr apk ;; esac; ok "Dependensi siap"; }
-choose_mode(){ say ""; say "Pilih mode Neofetch:"; say "[1] Full"; say "[2] Lite"; read -rp "Pilihan [1/2]: " mode_input || true; case "${mode_input:-2}" in 1) DASH_MODE="full" ;; 2|*) DASH_MODE="lite" ;; esac; }
-ask_userhost(){ say ""; say "Masukkan User@Host (Enter=otomatis)"; read -r -p "User@Host: " WANT_UH || true; if [ -n "${WANT_UH:-}" ] && ! printf "%s" "$WANT_UH" | grep -q "@"; then WANT_UH="$(whoami 2>/dev/null || echo "$TARGET_USER")@$WANT_UH"; fi; ensure_file "$ENV_FILE"; { echo "DASH_USERHOST_RAW='${WANT_UH:-}'"; echo "DASH_MODE='${DASH_MODE:-lite}'"; echo "DASH_LAST_WRITE_EPOCH='$(date +%s)'"; } >"$ENV_FILE" 2>>"$LOG_FILE" || true; chown "$TARGET_USER":"$TARGET_USER" "$ENV_FILE" 2>>"$LOG_FILE" || true; }
-strip_old_block(){ [ -f "$1" ] || return 0; grep -q "^$MARK$" "$1" >/dev/null 2>&1 && sed -i "/^$MARK$/,/^$MARK$/d" "$1" 2>>"$LOG_FILE" || true; }
-dashboard_block(){ cat <<'EOF'
-### TERMINAL_DASHBOARD_ACTIVE ###
-if [[ $- == *i* ]]; then
-  if [ -n "${DASHBOARD_EXECUTED:-}" ]; then return; fi
-  export DASHBOARD_EXECUTED=1
-  curtty="$(/usr/bin/tty 2>/dev/null || tty 2>/dev/null || echo unknown)"
-  if [ -n "${DASHBOARD_TTY_SHOWN:-}" ] && [ "$DASHBOARD_TTY_SHOWN" = "$curtty" ]; then return; fi
-  export DASHBOARD_TTY_SHOWN="$curtty"
-  [ -f "$HOME/.terminal_dashboard.env" ] && . "$HOME/.terminal_dashboard.env"
-  _has(){ command -v "$1" >/dev/null 2>&1; }
-  _val(){ [ -n "$1" ] && printf "%s" "$1" || printf "-"; }
-  printf '\033[2J\033[H'
-  _pretty="Linux"
-  [ -f /etc/os-release ] && . /etc/os-release 2>/dev/null && _pretty="${PRETTY_NAME:-Linux}"
-  if [ -z "${DASHBOARD_LOGO_DONE:-}" ]; then
-    if _has neofetch; then
-      if [ "${DASH_MODE:-lite}" = "full" ]; then
-        neofetch --ascii_distro ubuntu --ascii --disable packages shell resolution de wm theme icons terminal >/dev/null 2>&1 || true
-      else
-        neofetch --ascii_distro ubuntu_small --ascii --disable packages shell resolution de wm theme icons terminal >/dev/null 2>&1 || true
-      fi
-    else
-      printf "\n"
-      printf "DashTerm\n\n"
-    fi
-    export DASHBOARD_LOGO_DONE=1
+MARK="### DASTERM_ACTIVE ###"
+LOCK="${TMPDIR:-/tmp}/dasterm.lock"
+LOG="${TMPDIR:-/tmp}/dasterm_$(date +%s).log"
+exec 9>"$LOCK"; flock -n 9 || { echo "Installer sudah berjalan."; exit 0; }
+trap 'rm -f "$LOCK" "$LOG"' EXIT
+
+G='\033[0;32m'; R='\033[0;31m'; Y='\033[1;33m'; C='\033[0;36m'; N='\033[0m'
+log(){ echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG" >&2; }
+ok(){ log "${G}✓${N} $*"; }
+warn(){ log "${Y}⚠${N} $*"; }
+die(){ log "${R}✗${N} $*"; exit 1; }
+info(){ log "${C}ℹ${N} $*"; }
+has(){ command -v "$1" &>/dev/null; }
+net_ok(){ timeout 2 bash -c 'exec 3<>/dev/tcp/1.1.1.1/53' 2>/dev/null || timeout 2 ping -c1 -W2 1.1.1.1 &>/dev/null; }
+
+detect_pkgmgr(){ for p in apt dnf yum pacman zypper apk; do has $p && { echo $p; return; }; done; echo none; }
+
+uninstall(){
+  info "Menghapus instalasi lama..."
+  for rc in "$BASHRC" "$ZSHRC"; do
+    [ -f "$rc" ] && sed -i "/^$MARK$/,/^$MARK$/d" "$rc" 2>/dev/null || true
+  done
+  [ -f "$ENV_FILE" ] && rm -f "$ENV_FILE"
+  ok "Instalasi lama dihapus"
+}
+
+install_deps(){
+  info "Memeriksa dependensi..."
+  local mgr=$(detect_pkgmgr)
+  [ "$mgr" = none ] && { warn "Tidak ada package-manager, lewati"; return; }
+  if ! net_ok; then warn "Offline mode – lewati dependensi"; return; fi
+  local pkgs=(neofetch pciutils dmidecode iproute2 util-linux procps grep gawk sed)
+  case "$mgr" in
+    apt) apt-get -qq update && DEBIAN_FRONTEND=noninteractive apt-get -qqy install "${pkgs[@]}" ;;
+    dnf) dnf -qy install "${pkgs[@]}" ;;
+    yum) yum -qy install "${pkgs[@]}" ;;
+    pacman) pacman -Sq --noconfirm "${pkgs[@]}" ;;
+    zypper) zypper -nq install "${pkgs[@]}" ;;
+    apk) apk add --no-cache "${pkgs[@]}" ;;
+  esac
+  ok "Dependensi terinstall"
+}
+
+choose_mode(){
+  echo; info "PILIH MODE DASHBOARD"
+  echo "1) FULL – logo besar, info lengkap"
+  echo "2) LITE – logo kecil, info ringkas (default)"
+  read -rp "Pilihan [1/2]: " x
+  case "${x:-2}" in 1) DASH_MODE=full ;; *) DASH_MODE=lite ;; esac
+  ok "Mode: ${DASH_MODE^^}"
+}
+
+ask_userhost(){
+  echo; info "CUSTOM USER@HOST"
+  local default="${TARGET_USER}@$(hostname)"
+  read -rp "Masukkan User@Host (Enter='$default'): " uh
+  if [ -z "$uh" ]; then DASH_UH="$default"
+  elif [[ ! "$uh" == *"@"* ]]; then DASH_UH="${TARGET_USER}@$uh"
+  else DASH_UH="$uh"; fi
+  if [[ "$DASH_UH" == "root@"* ]]; then
+    echo; info "✨ Kamu root! Default akan jadi root@aka"
+    read -rp "Ganti 'aka' dengan nama custom (Enter=aka): " aka
+    DASH_AKA="${aka:-aka}"
   fi
-  uh="${DASH_USERHOST_RAW:-$(whoami 2>/dev/null || echo -n '-')@$(hostname 2>/dev/null || echo -n '-')}"
-  ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  [ -z "$ip" ] && ip="$(ip route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1);break}}')"
-  kern="$(uname -r 2>/dev/null)"
-  bt="$(who -b 2>/dev/null | awk '{print $3, $4}')"
-  [ -z "$bt" ] && bt="$(uptime -s 2>/dev/null)"
-  up="$(uptime -p 2>/dev/null | sed 's/^up //')"
-  cpu="$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d':' -f2 | sed 's/^ //')"
-  [ -z "$cpu" ] && cpu="$(lscpu 2>/dev/null | awk -F: '/Model name/ {sub(/^ +/, "", $2); print $2; exit}')"
-  cores="$(nproc 2>/dev/null)"
-  ram="$(free -h 2>/dev/null | awk '/^Mem:/ {print $2}')"
-  disk="$(df -h / 2>/dev/null | awk 'NR==2 {printf "%s / %s", $3, $2}')"
-  load="$(awk '{print $1","$2","$3}' /proc/loadavg 2>/dev/null)"
-  dns="$(awk '/^nameserver/ {printf "%s ", $2}' /etc/resolv.conf 2>/dev/null | xargs)"
-  virt_final=""; virt_vendor=""; virt_type=""; virt_flags=""
-  _has systemd-detect-virt && vdet="$(systemd-detect-virt 2>/dev/null || true)" && [ "$vdet" != "none" ] && virt_final="$vdet"
-  grep -qi microsoft /proc/sys/kernel/osrelease 2>/dev/null && virt_final="${virt_final:+$virt_final+}WSL"
-  [ -f /.dockerenv ] && virt_final="${virt_final:+$virt_final+}Docker"
-  grep -qaE 'lxc|container' /proc/1/cgroup 2>/dev/null && virt_final="${virt_final:+$virt_final+}LXC"
-  lscpu_info="$(lscpu 2>/dev/null || true)"
-  [ -n "$lscpu_info" ] && virt_vendor="$(printf "%s" "$lscpu_info" | awk -F: '/Hypervisor vendor/ {gsub(/^ +/, "", $2); print $2; exit}')" && virt_type="$(printf "%s" "$lscpu_info" | awk -F: '/Virtualization type/ {gsub(/^ +/, "", $2); print $2; exit}')"
-  _has dmidecode && { dmi_manu="$(dmidecode -s system-manufacturer 2>/dev/null | tr -d '\r')"; dmi_prod="$(dmidecode -s system-product-name 2>/dev/null | tr -d '\r')"; case "$dmi_manu $dmi_prod" in *KVM*|*QEMU*) virt_vendor="KVM/QEMU" ;; *VMware*) virt_vendor="VMware" ;; *VirtualBox*) virt_vendor="VirtualBox" ;; *Microsoft*) virt_vendor="${virt_vendor:-Microsoft}" ;; *Xen*) virt_vendor="Xen" ;; esac; }
-  flags="$(awk -F: '/flags/ {print $2; exit}' /proc/cpuinfo 2>/dev/null)"
-  echo "$flags" | grep -qw vmx && virt_flags="VT-x"
-  echo "$flags" | grep -qw svm && virt_flags="${virt_flags:+$virt_flags, }AMD-V"
-  [ -e /dev/kvm ] && virt_flags="${virt_flags:+$virt_flags, }/dev/kvm"
-  build_virt="${virt_final:+$virt_final | }${virt_vendor:+$virt_vendor | }${virt_type:-}"
-  [ -z "$build_virt" ] && build_virt="Unknown / Possibly Physical"
-  [ -n "$virt_flags" ] && build_virt="$build_virt ($virt_flags)"
-  _has lspci && gpu="$(lspci 2>/dev/null | grep -iE 'vga|3d|display' | head -1 | cut -d':' -f3- | sed 's/^ //')"
-  now="$(date '+%A, %d %B %Y - %H:%M:%S')"
-  if [ -z "${DASHBOARD_INFO_DONE:-}" ]; then
-    echo "========================================"
-    echo "User@Host     : $(_val "$uh")"
-    echo "OS            : $(_val "$_pretty")"
-    echo "Kernel        : $(_val "$kern")"
-    echo "Virtualization: $(_val "$build_virt")"
-    echo "Login Time    : $now"
-    echo "Boot Time     : $(_val "$bt")"
-    echo "Uptime        : $(_val "$up")"
-    echo "IP Address    : $(_val "$ip")"
-    echo "CPU Model     : $(_val "$cpu")"
-    echo "CPU Cores     : $(_val "$cores")"
-    echo "GPU           : $(_val "$gpu")"
-    echo "RAM Total     : $(_val "$ram")"
-    echo "Disk Used     : $(_val "$disk")"
-    echo "Load Average  : $(_val "$load")"
-    echo "DNS Servers   : $(_val "$dns")"
-    echo "========================================"
-    export DASHBOARD_INFO_DONE=1
+  ok "User@Host: $DASH_UH"
+  [ -n "${DASH_AKA:-}" ] && ok "Alias: $DASH_AKA"
+}
+
+ask_config(){
+  echo; info "KONFIGURASI TAMBAHAN"
+  read -rp "Gunakan warna pastel? [Y/n] " c
+  case "${c:-y}" in [Yy]*) DASH_COLORS=pastel ;; *) DASH_COLORS=default ;; esac
+  read -rp "Tampilkan setiap login? [Y/n] " r
+  case "${r:-y}" in [Yy]*) DASH_SHOW=always ;; *) DASH_SHOW=once ;; esac
+  ok "Warna: $DASH_COLORS | Show: $DASH_SHOW"
+}
+
+save_env(){
+  info "Menyimpan konfigurasi..."
+  cat >"$ENV_FILE" <<EOF
+# dasterm environment
+DASH_USERHOST='$DASH_UH'
+DASH_AKA='${DASH_AKA:-}'
+DASH_MODE='$DASH_MODE'
+DASH_COLORS='$DASH_COLORS'
+DASH_SHOW='$DASH_SHOW'
+DASH_INSTALLED='$(date +"%Y-%m-%d %H:%M:%S")'
+EOF
+  chmod 644 "$ENV_FILE"
+  chown "$TARGET_USER":"$TARGET_USER" "$ENV_FILE"
+  ok "Konfigurasi disimpan di $ENV_FILE"
+}
+
+dashboard_block(){
+  cat <<'EOF'
+### DASTERM_ACTIVE ###
+[ -z "${DASTERM_DONE:-}" ] && [ $- = *i* ] && {
+  export DASTERM_DONE=1
+  [ -f "$HOME/.dasterm.env" ] && . "$HOME/.dasterm.env"
+  [ "${DASH_SHOW:-always}" = once ] && [ -n "${DASTERM_SHOWN:-}" ] && return
+  export DASTERM_SHOWN=1
+  if [ "${DASH_COLORS:-default}" = pastel ]; then
+    C1='\033[38;2;255;184;108m'; C2='\033[38;2;108;197;255m'; C3='\033[38;2;200;255;108m'; C4='\033[38;2;255;108;184m'
+  else
+    C1='\033[1;33m'; C2='\033[1;34m'; C3='\033[1;32m'; C4='\033[1;36m'
   fi
-fi
-### TERMINAL_DASHBOARD_ACTIVE ###
+  NC='\033[0m'; BOLD='\033[1m'
+  clear
+  if has neofetch; then
+    neofetch --ascii --disable packages shell resolution de wm theme icons terminal 2>/dev/null || true
+  fi
+  if [ -n "${DASH_AKA:-}" ] && [[ "${DASH_USERHOST:-}" == "root@"* ]]; then
+    uh="root@${DASH_AKA}"
+  else
+    uh="${DASH_USERHOST:-$(whoami)@$(hostname)}"
+  fi
+  echo -e "${BOLD}${C2}╔══════════════════════════════════════════════════════╗${NC}"
+  echo -e "${C2}║${NC} ${C1}User@Host${NC}     : ${BOLD}${uh}${NC}"
+  echo -e "${C2}║${NC} ${C1}OS${NC}            : $(source /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || lsb_release -d | cut -f2 || echo "Linux")"
+  echo -e "${C2}║${NC} ${C1}Kernel${NC}        : $(uname -r)"
+  echo -e "${C2}║${NC} ${C1}Architecture${NC}  : $(uname -m)"
+  echo -e "${C2}║${NC} ${C1}Virtualization${NC}: $(systemd-detect-virt 2>/deev/null || echo "Physical")"
+  echo -e "${C2}║${NC} ${C1}Boot Time${NC}     : $(who -b | awk '{print $3,$4}' || uptime -s)"
+  echo -e "${C2}║${NC} ${C1}Uptime${NC}        : $(uptime -p | sed 's/up //')"
+  echo -e "${C2}║${NC} ${C1}Load Average${NC}  : $(awk '{printf "%.2f, %.2f, %.2f", $1, $2, $3}' /proc/loadavg)"
+  echo -e "${C2}║${NC} ${C1}IP Address${NC}    : $(hostname -I | awk '{print $1}' || ip route get 1.1.1.1 | awk '/src/{print $7}')"
+  echo -e "${C2}║${NC} ${C1}CPU Model${NC}     : $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //' | cut -c1-35)"
+  echo -e "${C2}║${NC} ${C1}CPU Cores${NC}     : $(nproc) cores"
+  echo -e "${C2}║${NC} ${C1}CPU Flags${NC}     : $(awk -F: '/flags/{print $2;exit}' /proc/cpuinfo | grep -oE '(vmx|svm|aes)' | tr '\n' ' ' || echo "N/A")"
+  echo -e "${C2}║${NC} ${C1}RAM Total${NC}     : $(free -h | awk '/Mem:/ {print $2}')"
+  echo -e "${C2}║${NC} ${C1}RAM Used${NC}      : $(free -h | awk '/Mem:/ {printf "%s (%.1f%%)", $3, $3/$2*100}')"
+  echo -e "${C2}║${NC} ${C1}Disk Root${NC}     : $(df -h / | awk 'NR==2 {printf "%s used of %s (%s)", $3, $2, $5}')"
+  echo -e "${C2}║${NC} ${C1}GPU${NC}           : $(lspci 2>/dev/null | grep -iE 'vga|3d|display' | head -1 | cut -d: -f3- | sed 's/^ //' | cut -c1-35 || echo "N/A")"
+  echo -e "${C2}║${NC} ${C1}DNS Servers${NC}   : $(awk '/^nameserver/{printf "%s ", $2}' /etc/resolv.conf | xargs || echo "N/A")"
+  echo -e "${C2}║${NC} ${C1}Processes${NC}     : $(ps aux | wc -l) running"
+  echo -e "${C2}║${NC} ${C1}Users${NC}         : $(who | wc -l) logged in"
+  echo -e "${C2}╚══════════════════════════════════════════════════════╝${NC}"
+}
+### DASTERM_ACTIVE ###
 EOF
 }
-atomic_append_block(){ local rc="$1"; local content="$2"; local tmp; tmp="$(mktemp)"; cat "$rc" > "$tmp" 2>>"$LOG_FILE" || true; printf "%s\n" "$content" >> "$tmp"; cp -f "$rc" "${rc}.backup" 2>>"$LOG_FILE" || true; mv -f "$tmp" "$rc" 2>>"$LOG_FILE" || true; chown "$TARGET_USER":"$TARGET_USER" "$rc" 2>>"$LOG_FILE" || true; }
-apply_to_rc(){ [ -f "$1" ] || return 0; strip_old_block "$1"; local block; block="$(dashboard_block)"; atomic_append_block "$1" "$block"; grep -q "^$MARK$" "$1" >/dev/null 2>&1 || atomic_append_block "$1" "$block"; }
-restart_shell(){ if [ -n "${DASHTERM_RESTARTED:-}" ]; then ok "Selesai"; return 0; fi; export DASHTERM_RESTARTED=1; say "Memuat ulang terminal"; sleep 1; local comm; comm="$(cat /proc/$$/comm 2>/dev/null || echo "")"; case "$comm" in zsh) exec zsh -l ;; bash|"") exec bash -l ;; *) exec "${SHELL:-/bin/bash}" -l ;; esac; }
-{
-  flock -n 9 || { warn "Proses lain sedang berjalan"; exit 0; }
-  say "DashTerm Installer v10"
+
+inject_rc(){
+  info "Menginject dashboard ke ${BASHRC##*/} & ${ZSHRC##*/}..."
+  for rc in "$BASHRC" "$ZSHRC"; do
+    [ -f "$rc" ] || { touch "$rc"; chown "$TARGET_USER":"$TARGET_USER" "$rc"; }
+    sed -i "/^$MARK$/,/^$MARK$/d" "$rc" 2>/dev/null || true
+    dashboard_block >> "$rc"
+    chown "$TARGET_USER":"$TARGET_USER" "$rc"
+  done
+  ok "Injector selesai"
+}
+
+restart_shell(){
+  echo; info "Installation complete! Restarting shell..."
+  sleep 1.5
+  clear
+  case "$TARGET_USER" in root) exec sudo -i ;; *) exec sudo -u "$TARGET_USER" -i ;; esac
+}
+
+main(){
+  clear
+  echo; echo -e "${C}${BOLD}"
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║                    dasterm by aka                           ║"
+  echo "║          Interactive Terminal Dashboard Installer            ║"
+  echo "╚══════════════════════════════════════════════════════════════╝${N}"
+  
+  if [ -f "$ENV_FILE" ]; then
+    warn "dasterm sudah terinstall pada $(grep DASH_INSTALLED "$ENV_FILE" | cut -d\"'\" -f2)"
+    echo "1) Reconfigure"
+    echo "2) Uninstall"
+    echo "3) Batal"
+    read -rp "Pilih [1/2/3] : " act
+    case "$act" in
+      1) ok "Mode reconfigure aktif" ;;
+      2) uninstall; ok "Uninstall selesai!"; exit 0 ;;
+      *) exit 0 ;;
+    esac
+  fi
+  
+  uninstall
   install_deps
-  say ""
-  say "Mode interaktif"
-  say "-------------"
   choose_mode
-  ensure_file "$BASHRC"
-  ensure_file "$ZSHRC"
   ask_userhost
-  say "Menulis blok dashboard"
-  apply_to_rc "$BASHRC"
-  apply_to_rc "$ZSHRC"
-  ok "Instalasi selesai"
+  ask_config
+  save_env
+  inject_rc
+  
+  echo; echo -e "${G}${BOLD}"
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║  install telah selesai, klik enter untuk reload tampilan    ║"
+  echo "╚══════════════════════════════════════════════════════════════╝${N}"
+  echo
+  read -p ""
+  
   restart_shell
-} 9>"$LOCK_FILE"
-```0
+}
+
+main "$@"
