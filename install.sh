@@ -87,7 +87,6 @@ ask_config(){
 save_env(){
   info "Menyimpan konfigurasi..."
   cat >"$ENV_FILE" <<EOF
-# dasterm environment
 DASH_USERHOST='$DASH_UH'
 DASH_AKA='${DASH_AKA:-}'
 DASH_MODE='$DASH_MODE'
@@ -101,52 +100,68 @@ EOF
 }
 
 dashboard_block(){
-  cat <<'EOF'
+  cat <<'BLOCK'
 ### DASTERM_ACTIVE ###
 [ -z "${DASTERM_DONE:-}" ] && [ $- = *i* ] && {
   export DASTERM_DONE=1
   [ -f "$HOME/.dasterm.env" ] && . "$HOME/.dasterm.env"
   [ "${DASH_SHOW:-always}" = once ] && [ -n "${DASTERM_SHOWN:-}" ] && return
   export DASTERM_SHOWN=1
+  
   if [ "${DASH_COLORS:-default}" = pastel ]; then
     C1='\033[38;2;255;184;108m'; C2='\033[38;2;108;197;255m'; C3='\033[38;2;200;255;108m'; C4='\033[38;2;255;108;184m'
   else
     C1='\033[1;33m'; C2='\033[1;34m'; C3='\033[1;32m'; C4='\033[1;36m'
   fi
   NC='\033[0m'; BOLD='\033[1m'
+  
   clear
-  if has neofetch; then
+  
+  if command -v neofetch >/dev/null 2>&1; then
     neofetch --ascii --disable packages shell resolution de wm theme icons terminal 2>/dev/null || true
   fi
+  
   if [ -n "${DASH_AKA:-}" ] && [[ "${DASH_USERHOST:-}" == "root@"* ]]; then
     uh="root@${DASH_AKA}"
   else
     uh="${DASH_USERHOST:-$(whoami)@$(hostname)}"
   fi
+  
+  os_info=$(source /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || lsb_release -d 2>/dev/null | cut -f2 || echo "Linux")
+  virt_info=$(systemd-detect-virt 2>/dev/null || echo "Physical")
+  boot_info=$(who -b 2>/dev/null | awk '\''{print $3,$4}'\'' || uptime -s 2>/dev/null || echo "N/A")
+  ip_info=$(hostname -I 2>/dev/null | awk '\''{print $1}'\'' || ip route get 1.1.1.1 2>/dev/null | awk '\''/src/{print $7}'\'' || echo "N/A")
+  cpu_info=$(grep -m1 '\''model name'\'' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | sed '\''s/^ //'\'' | cut -c1-35 || echo "N/A")
+  ram_total=$(free -h 2>/dev/null | awk '\''/Mem:/ {print $2}'\'' || echo "N/A")
+  ram_used=$(free -h 2>/dev/null | awk '\''/Mem:/ {printf "%s (%.1f%%)", $3, $3/$2*100}'\'' || echo "N/A")
+  disk_info=$(df -h / 2>/dev/null | awk '\''NR==2 {printf "%s used of %s (%s)", $3, $2, $5}'\'' || echo "N/A")
+  gpu_info=$(lspci 2>/dev/null | grep -iE '\''vga|3d|display'\'' | head -1 | cut -d: -f3- | sed '\''s/^ //'\'' | cut -c1-35 || echo "N/A")
+  dns_info=$(awk '\''/^nameserver/{printf "%s ", $2}'\'' /etc/resolv.conf 2>/dev/null | xargs || echo "N/A")
+  
   echo -e "${BOLD}${C2}╔══════════════════════════════════════════════════════╗${NC}"
   echo -e "${C2}║${NC} ${C1}User@Host${NC}     : ${BOLD}${uh}${NC}"
-  echo -e "${C2}║${NC} ${C1}OS${NC}            : $(source /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || lsb_release -d | cut -f2 || echo "Linux")"
+  echo -e "${C2}║${NC} ${C1}OS${NC}            : ${os_info}"
   echo -e "${C2}║${NC} ${C1}Kernel${NC}        : $(uname -r)"
   echo -e "${C2}║${NC} ${C1}Architecture${NC}  : $(uname -m)"
-  echo -e "${C2}║${NC} ${C1}Virtualization${NC}: $(systemd-detect-virt 2>/deev/null || echo "Physical")"
-  echo -e "${C2}║${NC} ${C1}Boot Time${NC}     : $(who -b | awk '{print $3,$4}' || uptime -s)"
-  echo -e "${C2}║${NC} ${C1}Uptime${NC}        : $(uptime -p | sed 's/up //')"
-  echo -e "${C2}║${NC} ${C1}Load Average${NC}  : $(awk '{printf "%.2f, %.2f, %.2f", $1, $2, $3}' /proc/loadavg)"
-  echo -e "${C2}║${NC} ${C1}IP Address${NC}    : $(hostname -I | awk '{print $1}' || ip route get 1.1.1.1 | awk '/src/{print $7}')"
-  echo -e "${C2}║${NC} ${C1}CPU Model${NC}     : $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //' | cut -c1-35)"
-  echo -e "${C2}║${NC} ${C1}CPU Cores${NC}     : $(nproc) cores"
-  echo -e "${C2}║${NC} ${C1}CPU Flags${NC}     : $(awk -F: '/flags/{print $2;exit}' /proc/cpuinfo | grep -oE '(vmx|svm|aes)' | tr '\n' ' ' || echo "N/A")"
-  echo -e "${C2}║${NC} ${C1}RAM Total${NC}     : $(free -h | awk '/Mem:/ {print $2}')"
-  echo -e "${C2}║${NC} ${C1}RAM Used${NC}      : $(free -h | awk '/Mem:/ {printf "%s (%.1f%%)", $3, $3/$2*100}')"
-  echo -e "${C2}║${NC} ${C1}Disk Root${NC}     : $(df -h / | awk 'NR==2 {printf "%s used of %s (%s)", $3, $2, $5}')"
-  echo -e "${C2}║${NC} ${C1}GPU${NC}           : $(lspci 2>/dev/null | grep -iE 'vga|3d|display' | head -1 | cut -d: -f3- | sed 's/^ //' | cut -c1-35 || echo "N/A")"
-  echo -e "${C2}║${NC} ${C1}DNS Servers${NC}   : $(awk '/^nameserver/{printf "%s ", $2}' /etc/resolv.conf | xargs || echo "N/A")"
-  echo -e "${C2}║${NC} ${C1}Processes${NC}     : $(ps aux | wc -l) running"
-  echo -e "${C2}║${NC} ${C1}Users${NC}         : $(who | wc -l) logged in"
+  echo -e "${C2}║${NC} ${C1}Virtualization${NC}: ${virt_info}"
+  echo -e "${C2}║${NC} ${C1}Boot Time${NC}     : ${boot_info}"
+  echo -e "${C2}║${NC} ${C1}Uptime${NC}        : $(uptime -p 2>/dev/null | sed '\''s/up //'\'' || echo "N/A")"
+  echo -e "${C2}║${NC} ${C1}Load Average${NC}  : $(awk '\''{printf "%.2f, %.2f, %.2f", $1, $2, $3}'\'' /proc/loadavg 2>/dev/null || echo "N/A")"
+  echo -e "${C2}║${NC} ${C1}IP Address${NC}    : ${ip_info}"
+  echo -e "${C2}║${NC} ${C1}CPU Model${NC}     : ${cpu_info}"
+  echo -e "${C2}║${NC} ${C1}CPU Cores${NC}     : $(nproc 2>/dev/null || echo "N/A") cores"
+  echo -e "${C2}║${NC} ${C1}CPU Flags${NC}     : $(awk -F: '\''/flags/{print $2;exit}'\'' /proc/cpuinfo 2>/dev/null | grep -oE '\''(vmx|svm|aes)'\'' | tr '\''\n'\'' '\'' '\'' || echo "N/A")"
+  echo -e "${C2}║${NC} ${C1}RAM Total${NC}     : ${ram_total}"
+  echo -e "${C2}║${NC} ${C1}RAM Used${NC}      : ${ram_used}"
+  echo -e "${C2}║${NC} ${C1}Disk Root${NC}     : ${disk_info}"
+  echo -e "${C2}║${NC} ${C1}GPU${NC}           : ${gpu_info}"
+  echo -e "${C2}║${NC} ${C1}DNS Servers${NC}   : ${dns_info}"
+  echo -e "${C2}║${NC} ${C1}Processes${NC}     : $(ps aux | wc -l || echo "N/A") running"
+  echo -e "${C2}║${NC} ${C1}Users${NC}         : $(who | wc -l || echo "N/A") logged in"
   echo -e "${C2}╚══════════════════════════════════════════════════════╝${NC}"
+  echo
 }
-### DASTERM_ACTIVE ###
-EOF
+BLOCK
 }
 
 inject_rc(){
